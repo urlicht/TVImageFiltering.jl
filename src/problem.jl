@@ -83,11 +83,54 @@ function _normalize_spacing(::Type{T}, ::Val{N}, spacing) where {T<:AbstractFloa
     )
 end
 
-function _normalize_constraint(
-    ::Type{T},
-    constraint::NoConstraint,
-) where {T<:AbstractFloat}
+function _normalize_constraint(::Type{T}, constraint::NoConstraint) where {T<:AbstractFloat}
     return constraint
+end
+
+function _normalize_tv_mode(
+    ::Val{N},
+    shape::NTuple{N,Int},
+    tv_mode::AbstractTVMode,
+) where {N}
+    return tv_mode
+end
+
+function _validate_group_shape(group_shape::NTuple{N,Int}, shape::NTuple{N,Int}) where {N}
+    @inbounds for d = 1:N
+        group_shape[d] > 0 ||
+            throw(ArgumentError("group_shape[$d] must be positive, got $(group_shape[d])"))
+        group_shape[d] <= shape[d] || throw(
+            ArgumentError(
+                "group_shape[$d]=$(group_shape[d]) must not exceed size(f, $d)=$(shape[d])",
+            ),
+        )
+    end
+    return group_shape
+end
+
+function _normalize_tv_mode(
+    ::Val{N},
+    shape::NTuple{N,Int},
+    tv_mode::GroupSparseTV{<:Integer},
+) where {N}
+    group_shape = ntuple(_ -> Int(tv_mode.group_shape), Val(N))
+    _validate_group_shape(group_shape, shape)
+    return GroupSparseTV(group_shape)
+end
+
+function _normalize_tv_mode(
+    ::Val{N},
+    shape::NTuple{N,Int},
+    tv_mode::GroupSparseTV{<:Tuple},
+) where {N}
+    length(tv_mode.group_shape) == N || throw(
+        ArgumentError(
+            "group_shape length must match ndims(f)=$N, got $(length(tv_mode.group_shape))",
+        ),
+    )
+    group_shape = ntuple(d -> Int(tv_mode.group_shape[d]), Val(N))
+    _validate_group_shape(group_shape, shape)
+    return GroupSparseTV(group_shape)
 end
 
 function _normalize_constraint(
@@ -130,12 +173,13 @@ function TVProblem(
     lambda_t >= zero(T) || throw(ArgumentError("lambda must be non-negative"))
     spacing_t = _normalize_spacing(T, Val(N), spacing)
     constraint_t = _normalize_constraint(T, constraint)
+    tv_mode_t = _normalize_tv_mode(Val(N), size(f), tv_mode)
     return TVProblem{
         T,
         N,
         typeof(f),
         typeof(data_fidelity),
-        typeof(tv_mode),
+        typeof(tv_mode_t),
         typeof(boundary),
         typeof(constraint_t),
     }(
@@ -143,7 +187,7 @@ function TVProblem(
         lambda_t,
         spacing_t,
         data_fidelity,
-        tv_mode,
+        tv_mode_t,
         boundary,
         constraint_t,
     )

@@ -2,16 +2,32 @@ using Test
 using TotalVariationImageFiltering
 
 @testset "Type Hierarchy" begin
-    @test TotalVariationImageFiltering.Neumann <: TotalVariationImageFiltering.AbstractBoundaryCondition
-    @test TotalVariationImageFiltering.L2Fidelity <: TotalVariationImageFiltering.AbstractDataFidelity
-    @test TotalVariationImageFiltering.PoissonFidelity <: TotalVariationImageFiltering.AbstractDataFidelity
-    @test TotalVariationImageFiltering.NoConstraint <: TotalVariationImageFiltering.AbstractPrimalConstraint
-    @test TotalVariationImageFiltering.NonnegativeConstraint <: TotalVariationImageFiltering.AbstractPrimalConstraint
-    @test TotalVariationImageFiltering.BoxConstraint <: TotalVariationImageFiltering.AbstractPrimalConstraint
-    @test TotalVariationImageFiltering.IsotropicTV <: TotalVariationImageFiltering.AbstractTVMode
-    @test TotalVariationImageFiltering.AnisotropicTV <: TotalVariationImageFiltering.AbstractTVMode
-    @test TotalVariationImageFiltering.ROFConfig <: TotalVariationImageFiltering.AbstractTVSolver
-    @test TotalVariationImageFiltering.PDHGConfig <: TotalVariationImageFiltering.AbstractTVSolver
+    @test TotalVariationImageFiltering.Neumann <:
+          TotalVariationImageFiltering.AbstractBoundaryCondition
+    @test TotalVariationImageFiltering.Periodic <:
+          TotalVariationImageFiltering.AbstractBoundaryCondition
+    @test TotalVariationImageFiltering.L2Fidelity <:
+          TotalVariationImageFiltering.AbstractDataFidelity
+    @test TotalVariationImageFiltering.PoissonFidelity <:
+          TotalVariationImageFiltering.AbstractDataFidelity
+    @test TotalVariationImageFiltering.NoConstraint <:
+          TotalVariationImageFiltering.AbstractPrimalConstraint
+    @test TotalVariationImageFiltering.NonnegativeConstraint <:
+          TotalVariationImageFiltering.AbstractPrimalConstraint
+    @test TotalVariationImageFiltering.BoxConstraint <:
+          TotalVariationImageFiltering.AbstractPrimalConstraint
+    @test TotalVariationImageFiltering.IsotropicTV <:
+          TotalVariationImageFiltering.AbstractTVMode
+    @test TotalVariationImageFiltering.AnisotropicTV <:
+          TotalVariationImageFiltering.AbstractTVMode
+    @test TotalVariationImageFiltering.GroupSparseTV <:
+          TotalVariationImageFiltering.AbstractTVMode
+    @test TotalVariationImageFiltering.ROFConfig <:
+          TotalVariationImageFiltering.AbstractTVSolver
+    @test TotalVariationImageFiltering.PDHGConfig <:
+          TotalVariationImageFiltering.AbstractTVSolver
+    @test TotalVariationImageFiltering.GSTVConfig <:
+          TotalVariationImageFiltering.AbstractTVSolver
 end
 
 @testset "Constraint Constructors" begin
@@ -31,6 +47,15 @@ end
     @test_throws ArgumentError TotalVariationImageFiltering.BoxConstraint(-1.0, NaN)
 end
 
+@testset "GroupSparseTV Constructors" begin
+    @test TotalVariationImageFiltering.GroupSparseTV().group_shape == 3
+    @test TotalVariationImageFiltering.GroupSparseTV(5).group_shape == 5
+    @test TotalVariationImageFiltering.GroupSparseTV((2, 3)).group_shape == (2, 3)
+    @test_throws ArgumentError TotalVariationImageFiltering.GroupSparseTV(0)
+    @test_throws ArgumentError TotalVariationImageFiltering.GroupSparseTV(())
+    @test_throws ArgumentError TotalVariationImageFiltering.GroupSparseTV((3, -1))
+end
+
 @testset "Common Config Validation" begin
     @test TotalVariationImageFiltering._validate_common_config(1, 1) === nothing
     @test_throws ArgumentError TotalVariationImageFiltering._validate_common_config(0, 1)
@@ -47,7 +72,8 @@ end
     @test cfg_default.check_every == 10
     @test TotalVariationImageFiltering._validate(cfg_default) === nothing
 
-    cfg_promoted = TotalVariationImageFiltering.PDHGConfig(tau = Float32(0.2), sigma = 0.1, tol = 1e-6)
+    cfg_promoted =
+        TotalVariationImageFiltering.PDHGConfig(tau = Float32(0.2), sigma = 0.1, tol = 1e-6)
     @test cfg_promoted isa TotalVariationImageFiltering.PDHGConfig{Float64}
 
     cfg_float32 = TotalVariationImageFiltering.PDHGConfig(
@@ -99,7 +125,8 @@ end
     cfg_promoted = TotalVariationImageFiltering.ROFConfig(tau = Float32(0.2), tol = 1e-6)
     @test cfg_promoted isa TotalVariationImageFiltering.ROFConfig{Float64}
 
-    cfg_float32 = TotalVariationImageFiltering.ROFConfig(tau = Float32(0.2), tol = Float32(1e-3))
+    cfg_float32 =
+        TotalVariationImageFiltering.ROFConfig(tau = Float32(0.2), tol = Float32(1e-3))
     @test cfg_float32 isa TotalVariationImageFiltering.ROFConfig{Float32}
 
     @test_throws ArgumentError TotalVariationImageFiltering._validate(
@@ -114,4 +141,39 @@ end
     @test_throws ArgumentError TotalVariationImageFiltering._validate(
         TotalVariationImageFiltering.ROFConfig(tol = -1e-6),
     )
+end
+
+
+@testset "GSTVConfig Constructor and Validation" begin
+    cfg = TotalVariationImageFiltering.GSTVConfig()
+    @test cfg.maxiter == 300
+    @test cfg.rho == 1.0
+    @test cfg.tol == 1e-4
+    @test cfg.check_every == 5
+    @test cfg.mm_maxiter == 20
+    @test cfg.mm_tol == 1e-5
+    @test cfg.cg_maxiter == 50
+    @test cfg.cg_tol == 1e-5
+    @test TotalVariationImageFiltering._validate(cfg) === nothing
+
+    cfg32 = TotalVariationImageFiltering.GSTVConfig(
+        rho = 1.0f0,
+        tol = 1.0f-4,
+        mm_tol = 1.0f-5,
+        cg_tol = 1.0f-5,
+    )
+    @test cfg32 isa TotalVariationImageFiltering.GSTVConfig{Float32}
+
+    for bad in (
+        TotalVariationImageFiltering.GSTVConfig(maxiter = 0),
+        TotalVariationImageFiltering.GSTVConfig(rho = 0),
+        TotalVariationImageFiltering.GSTVConfig(tol = -1),
+        TotalVariationImageFiltering.GSTVConfig(check_every = 0),
+        TotalVariationImageFiltering.GSTVConfig(mm_maxiter = 0),
+        TotalVariationImageFiltering.GSTVConfig(mm_tol = -1),
+        TotalVariationImageFiltering.GSTVConfig(cg_maxiter = 0),
+        TotalVariationImageFiltering.GSTVConfig(cg_tol = -1),
+    )
+        @test_throws ArgumentError TotalVariationImageFiltering._validate(bad)
+    end
 end

@@ -18,6 +18,7 @@ TotalVariationImageFiltering
 ```@docs
 AbstractBoundaryCondition
 Neumann
+Periodic
 AbstractDataFidelity
 L2Fidelity
 PoissonFidelity
@@ -28,6 +29,7 @@ BoxConstraint
 AbstractTVMode
 IsotropicTV
 AnisotropicTV
+GroupSparseTV
 AbstractTVSolver
 TVProblem
 SolverStats
@@ -35,6 +37,9 @@ ROFConfig
 ROFState
 PDHGConfig
 PDHGState
+GSTVConfig
+GSTVState
+GSTVBatchState
 DiscrepancySelection
 SURESelection
 ```
@@ -61,4 +66,6 @@ allocate_dual
 gradient!
 divergence!
 project_dual_ball!
+group_sum!
+group_sum_adjoint!
 ```

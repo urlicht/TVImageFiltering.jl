@@ -31,8 +31,10 @@ Batch state reuse:
 
 - pass `state = [ROFState(slice1), ROFState(slice2), ...]` for ROF;
 - pass `state = [PDHGState(slice1), PDHGState(slice2), ...]` for PDHG.
+- pass one `GSTVBatchState(f_batch, mode)` for GSTV; it processes final-axis
+  items sequentially through one contiguous spatial workspace.
 
-State vector length must match batch size.
+ROF and PDHG state-vector lengths must match the batch size.
 
 ## CUDA Extension
 
@@ -56,12 +58,15 @@ u_gpu, stats_gpu = TotalVariationImageFiltering.solve(problem_gpu, TotalVariatio
 
 Current behavior based on extension code/tests:
 
-- CUDA kernels are provided for gradient/divergence/projection primitives.
-- Single-image ROF and PDHG on `CuArray` are supported.
-- Batched CUDA solve is specialized for `ROFConfig` and `PDHGConfig`.
+- CUDA kernels are provided for gradient/divergence/projection and separable
+  overlapping-group sums.
+- Single-image ROF, PDHG, and GSTV solves on `CuArray` are supported.
+- Batched CUDA solve is specialized for `ROFConfig` and `PDHGConfig`;
+  `GSTVConfig` uses the bounded-memory sequential workspace described above.
 - Batched CUDA path currently requires:
   - `L2Fidelity` (ROF), or `L2Fidelity` / `PoissonFidelity` (PDHG),
-  - `Neumann` boundary.
+  - `L2Fidelity` and `NoConstraint()` (GSTV),
+  - `Neumann()` or `Periodic()` boundary.
 
 ROF paths currently support only `constraint = NoConstraint()`.
 
@@ -71,5 +76,6 @@ If CUDA is unavailable, CPU paths continue to work.
 
 Repository tests compare CPU and CUDA outputs with tolerances for:
 
-- single-image ROF solve;
-- batched ROF solve.
+- 2D and 3D gradients and group sums under both boundaries;
+- single-image ROF, PDHG, and GSTV solves;
+- GSTV state reuse and sequential batch solves.

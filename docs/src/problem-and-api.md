@@ -22,8 +22,8 @@ Key inputs:
 - `lambda`: TV weight (`>= 0`).
 - `spacing`: `nothing`, scalar, `NTuple{N}`, or length-`N` vector.
 - `data_fidelity`: `L2Fidelity()` or `PoissonFidelity()`.
-- `tv_mode`: `IsotropicTV()` or `AnisotropicTV()`.
-- `boundary`: currently `Neumann()`.
+- `tv_mode`: `IsotropicTV()`, `AnisotropicTV()`, or `GroupSparseTV(...)`.
+- `boundary`: `Neumann()` or `Periodic()`.
 - `constraint`: `NoConstraint()`, `NonnegativeConstraint()`, or `BoxConstraint(lower, upper)`.
 
 `TVProblem` is immutable, but it stores `f` by reference. For repeated solves
@@ -55,6 +55,7 @@ Supported solvers:
 
 - `ROFConfig` (ROF model with `L2Fidelity`).
 - `PDHGConfig` (`L2Fidelity` and `PoissonFidelity`, with optional primal constraints).
+- `GSTVConfig` (`L2Fidelity`, `GroupSparseTV`, and no primal constraint).
 
 `ROFConfig` currently supports only `constraint = NoConstraint()`.
 
@@ -75,6 +76,11 @@ Behavior:
   solver buffer and mainly affects the first relative-change check.
 - `state.p` (dual variable) is retained across calls.
 - State shape/eltype must match the solve buffer.
+
+For GSTV, construct `GSTVState(problem.f, problem.tv_mode)`. Its ADMM split and
+scaled-dual fields are retained between calls. `GSTVBatchState` instead owns one
+contiguous spatial workspace and resets split variables between sequential batch
+items, keeping peak workspace independent of batch size.
 
 ## Batch API
 

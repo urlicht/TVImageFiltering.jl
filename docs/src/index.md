@@ -12,6 +12,8 @@ It currently provides:
 - PDHG / Chambolle-Pock for `L2 + TV` and Poisson `KL + TV`.
 - PDHG primal constraints: non-negativity and box constraints.
 - Isotropic and anisotropic TV.
+- Overlapping group-sparse anisotropic TV for 2D images and 3D volumes.
+- Neumann and periodic boundaries.
 - Single-image and batched solves.
 - Automatic lambda selection for ROF (discrepancy principle and MC-SURE).
 - Optional CUDA acceleration via package extension.
@@ -33,6 +35,7 @@ Core models:
 - [Problem & API](problem-and-api.md)
 - [ROF Solver](rof-solver.md)
 - [PDHG Solver](pdhg-solver.md)
+- [Group-Sparse TV Solver](gstv-solver.md)
 - [Lambda Selection](lambda-selection.md)
 - [Batch & CUDA](batch-and-cuda.md)
 - [Benchmarking](benchmarking.md)

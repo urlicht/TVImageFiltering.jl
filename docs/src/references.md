@@ -6,6 +6,11 @@
 2. A. Chambolle, "An algorithm for total variation minimization and applications," *Journal of Mathematical Imaging and Vision* 20:89-97, 2004. [DOI:10.1023/B:JMIV.0000011325.36760.1E](https://doi.org/10.1023/B:JMIV.0000011325.36760.1E)
 3. A. Chambolle and T. Pock, "A First-Order Primal-Dual Algorithm for Convex Problems with Applications to Imaging," *Journal of Mathematical Imaging and Vision* 40:120-145, 2011. [DOI:10.1007/s10851-010-0251-1](https://doi.org/10.1007/s10851-010-0251-1)
 
+## Group-Sparse Total Variation
+
+1. I. W. Selesnick and P.-Y. Chen, "Total Variation Denoising with Overlapping Group Sparsity," *ICASSP*, 2013. [Author page and paper](https://eeweb.engineering.nyu.edu/iselesni/gstv/)
+2. J. Liu, T.-Z. Huang, I. W. Selesnick, X.-G. Lv, and P.-Y. Chen, "Image Restoration using Total Variation with Overlapping Group Sparsity," *Information Sciences* 295:232-246, 2015. [arXiv:1310.3447](https://arxiv.org/abs/1310.3447), [DOI:10.1016/j.ins.2014.10.041](https://doi.org/10.1016/j.ins.2014.10.041)
+
 ## Lambda Selection
 
 1. V. A. Morozov, *Methods for Solving Incorrectly Posed Problems*, 1984. [DOI:10.1007/978-1-4612-5280-1](https://doi.org/10.1007/978-1-4612-5280-1)

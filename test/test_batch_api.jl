@@ -70,8 +70,10 @@ end
         check_every = 10,
     )
 
-    states =
-        [TotalVariationImageFiltering.ROFState(selectdim(f_batch, 3, b)) for b = 1:size(f_batch, 3)]
+    states = [
+        TotalVariationImageFiltering.ROFState(selectdim(f_batch, 3, b)) for
+        b = 1:size(f_batch, 3)
+    ]
     u1, st1 = TotalVariationImageFiltering.solve_batch(
         f_batch,
         config;
@@ -92,7 +94,11 @@ end
     @test st2.converged
     @test maximum(abs.(u1 .- u2)) <= 1e-5
 
-    @test_throws ArgumentError TotalVariationImageFiltering.solve_batch(randn(8), config; lambda = 0.1)
+    @test_throws ArgumentError TotalVariationImageFiltering.solve_batch(
+        randn(8),
+        config;
+        lambda = 0.1,
+    )
     @test_throws ArgumentError TotalVariationImageFiltering.solve_batch(
         f_batch,
         config;

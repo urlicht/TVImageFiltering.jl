@@ -97,6 +97,33 @@ Anisotropic TV, `sum(sum_d |grad_d u|)`.
 """
 struct AnisotropicTV <: AbstractTVMode end
 
+"""
+Overlapping group-sparse anisotropic TV.
+
+`group_shape` may be a positive integer, expanded across all spatial axes by
+`TVProblem`, or a tuple with one positive entry per spatial axis. Groups are
+applied separately to each directional derivative. A group shape of one along
+every axis is equivalent to [`AnisotropicTV`](@ref).
+"""
+struct GroupSparseTV{S} <: AbstractTVMode
+    group_shape::S
+end
+
+function GroupSparseTV(group_size::Integer = 3)
+    group_size > 0 || throw(ArgumentError("group_size must be positive, got $group_size"))
+    return GroupSparseTV{Int}(Int(group_size))
+end
+
+function GroupSparseTV(group_shape::Tuple{Vararg{Integer,N}}) where {N}
+    N > 0 || throw(ArgumentError("group_shape must not be empty"))
+    normalized = ntuple(d -> Int(group_shape[d]), Val(N))
+    @inbounds for d = 1:N
+        normalized[d] > 0 ||
+            throw(ArgumentError("group_shape[$d] must be positive, got $(group_shape[d])"))
+    end
+    return GroupSparseTV{typeof(normalized)}(normalized)
+end
+
 #
 # Solver
 #

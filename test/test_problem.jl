@@ -82,10 +82,12 @@ end
     prob_scalar = TotalVariationImageFiltering.TVProblem(f; lambda = 0.1, spacing = 2)
     @test prob_scalar.spacing == (2.0, 2.0, 2.0)
 
-    prob_tuple = TotalVariationImageFiltering.TVProblem(f; lambda = 0.1, spacing = (0.5, 2.0, 4.0))
+    prob_tuple =
+        TotalVariationImageFiltering.TVProblem(f; lambda = 0.1, spacing = (0.5, 2.0, 4.0))
     @test prob_tuple.spacing == (0.5, 2.0, 4.0)
 
-    prob_vector = TotalVariationImageFiltering.TVProblem(f; lambda = 0.1, spacing = [0.5, 2.0, 4.0])
+    prob_vector =
+        TotalVariationImageFiltering.TVProblem(f; lambda = 0.1, spacing = [0.5, 2.0, 4.0])
     @test prob_vector.spacing == (0.5, 2.0, 4.0)
 
     @test_throws ArgumentError TotalVariationImageFiltering.TVProblem(
@@ -118,4 +120,35 @@ end
 @testset "TVProblem Lambda Validation" begin
     f = randn(Float64, 3, 4)
     @test_throws ArgumentError TotalVariationImageFiltering.TVProblem(f; lambda = -1.0)
+end
+
+
+@testset "TVProblem GroupSparseTV Normalization" begin
+    f2 = zeros(Float32, 8, 6)
+    scalar = TotalVariationImageFiltering.TVProblem(
+        f2;
+        lambda = 0.1,
+        tv_mode = TotalVariationImageFiltering.GroupSparseTV(3),
+    )
+    @test scalar.tv_mode.group_shape == (3, 3)
+
+    tuple_mode = TotalVariationImageFiltering.TVProblem(
+        zeros(7, 6, 5);
+        lambda = 0.1,
+        tv_mode = TotalVariationImageFiltering.GroupSparseTV((2, 3, 4)),
+        boundary = TotalVariationImageFiltering.Periodic(),
+    )
+    @test tuple_mode.tv_mode.group_shape == (2, 3, 4)
+    @test tuple_mode.boundary isa TotalVariationImageFiltering.Periodic
+
+    @test_throws ArgumentError TotalVariationImageFiltering.TVProblem(
+        f2;
+        lambda = 0.1,
+        tv_mode = TotalVariationImageFiltering.GroupSparseTV((3, 3, 3)),
+    )
+    @test_throws ArgumentError TotalVariationImageFiltering.TVProblem(
+        f2;
+        lambda = 0.1,
+        tv_mode = TotalVariationImageFiltering.GroupSparseTV((9, 3)),
+    )
 end

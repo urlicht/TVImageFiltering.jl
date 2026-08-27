@@ -31,6 +31,8 @@ Recommended entry points:
 - PDHG / Chambolle-Pock for `L2 + TV` and Poisson `KL + TV`
 - PDHG primal constraints: non-negativity and box constraints
 - Isotropic and anisotropic TV
+- Overlapping group-sparse anisotropic TV for 2D images and 3D volumes
+- Neumann and periodic boundaries
 - Single-image and batched solves
 - Automatic lambda selection for ROF (discrepancy principle and MC-SURE)
 - Optional CUDA acceleration via package extension
@@ -75,6 +77,22 @@ problem = TotalVariationImageFiltering.TVProblem(
 )
 
 u, stats = TotalVariationImageFiltering.solve(problem, TotalVariationImageFiltering.ROFConfig())
+```
+
+Group-sparse TV uses the low-memory ADMM/MM solver:
+
+```julia
+volume = rand(Float32, 96, 96, 64)
+mode = TotalVariationImageFiltering.GroupSparseTV(3)
+problem = TotalVariationImageFiltering.TVProblem(
+    volume;
+    lambda = 0.08f0,
+    tv_mode = mode,
+)
+u, stats = TotalVariationImageFiltering.solve(
+    problem,
+    TotalVariationImageFiltering.GSTVConfig(),
+)
 ```
 
 ## Benchmarking

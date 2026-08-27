@@ -19,6 +19,7 @@ makedocs(
         "Problem & API" => "problem-and-api.md",
         "ROF Solver" => "rof-solver.md",
         "PDHG Solver" => "pdhg-solver.md",
+        "Group-Sparse TV Solver" => "gstv-solver.md",
         "Lambda Selection" => "lambda-selection.md",
         "Batch & CUDA" => "batch-and-cuda.md",
         "Benchmarking" => "benchmarking.md",
@@ -30,9 +31,5 @@ makedocs(
 deploydocs(
     repo = "github.com/urlicht/TotalVariationImageFiltering.jl.git",
     devbranch = "main",
-    versions = [
-        "stable" => "v^",
-        "v#.#.#",
-        "dev" => "dev",
-    ],
+    versions = ["stable" => "v^", "v#.#.#", "dev" => "dev"],
 )

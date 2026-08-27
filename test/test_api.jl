@@ -11,7 +11,11 @@ struct DummySolverForAPI <: TotalVariationImageFiltering.AbstractTVSolver end
     init = fill(9.0, size(f))
     init_before = copy(init)
 
-    u, stats = TotalVariationImageFiltering.solve(prob, TotalVariationImageFiltering.ROFConfig(); init = init)
+    u, stats = TotalVariationImageFiltering.solve(
+        prob,
+        TotalVariationImageFiltering.ROFConfig();
+        init = init,
+    )
     @test u == f
     @test stats.converged
     @test u !== init
@@ -50,7 +54,12 @@ end
     state = TotalVariationImageFiltering.ROFState(f)
 
     u1, s1 = TotalVariationImageFiltering.solve(prob, cfg; state = state)
-    u2, s2 = TotalVariationImageFiltering.solve(prob, cfg; init = fill(3.0, size(f)), state = state)
+    u2, s2 = TotalVariationImageFiltering.solve(
+        prob,
+        cfg;
+        init = fill(3.0, size(f)),
+        state = state,
+    )
     @test s1.converged
     @test s2.converged
     @test isapprox(u1, u2; atol = 1e-6, rtol = 0.0)
@@ -61,6 +70,10 @@ end
     prob = TotalVariationImageFiltering.TVProblem(f; lambda = 0.1)
     u = zeros(6)
 
-    @test_throws MethodError TotalVariationImageFiltering.solve!(u, prob, DummySolverForAPI())
+    @test_throws MethodError TotalVariationImageFiltering.solve!(
+        u,
+        prob,
+        DummySolverForAPI(),
+    )
     @test_throws MethodError TotalVariationImageFiltering.solve(prob, DummySolverForAPI())
 end
