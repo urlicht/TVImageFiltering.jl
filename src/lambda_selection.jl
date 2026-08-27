@@ -133,7 +133,8 @@ function select_lambda_discrepancy(
     init::Union{Nothing,AbstractArray} = nothing,
     warm_start::Bool = true,
 ) where {T<:AbstractFloat,N}
-    init === nothing || size(init) == size(f) ||
+    init === nothing ||
+        size(init) == size(f) ||
         throw(ArgumentError("init must match f size"))
 
     sigma_t = T(sigma)
@@ -333,7 +334,8 @@ function select_lambda_sure(
     init::Union{Nothing,AbstractArray} = nothing,
     warm_start::Bool = true,
 ) where {T<:AbstractFloat,N}
-    init === nothing || size(init) == size(f) ||
+    init === nothing ||
+        size(init) == size(f) ||
         throw(ArgumentError("init must match f size"))
 
     isempty(lambda_grid) && throw(ArgumentError("lambda_grid must be non-empty"))
@@ -341,7 +343,8 @@ function select_lambda_sure(
     for lambda in lambda_grid
         lambda_t = T(lambda)
         isfinite(lambda_t) || throw(ArgumentError("lambda_grid values must be finite"))
-        lambda_t >= zero(T) || throw(ArgumentError("lambda_grid values must be non-negative"))
+        lambda_t >= zero(T) ||
+            throw(ArgumentError("lambda_grid values must be non-negative"))
         push!(lambdas, lambda_t)
     end
     sort!(lambdas)

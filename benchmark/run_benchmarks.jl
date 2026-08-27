@@ -327,7 +327,12 @@ function run_cpu_benchmarks(cfg::BenchConfig, cases, rows)
         trial = run(
             @benchmarkable begin
                 copyto!($u, $(case.noisy))
-                TotalVariationImageFiltering.solve!($u, $problem, $solver_cfg; state = $state)
+                TotalVariationImageFiltering.solve!(
+                    $u,
+                    $problem,
+                    $solver_cfg;
+                    state = $state,
+                )
             end samples = cfg.samples evals = cfg.evals
         )
         push_summary!(rows, "cpu", "solve_state_reuse", case.image, dims, cfg, trial)
@@ -340,8 +345,10 @@ function maybe_load_cuda()
         @eval using CUDA
         cuda = Base.invokelatest(() -> getfield(@__MODULE__, :CUDA))
         Base.invokelatest(cuda.functional) || return nothing
-        Base.get_extension(TotalVariationImageFiltering, :TotalVariationImageFilteringCUDAExt) === nothing &&
-            return nothing
+        Base.get_extension(
+            TotalVariationImageFiltering,
+            :TotalVariationImageFilteringCUDAExt,
+        ) === nothing && return nothing
         return cuda
     catch
         return nothing
@@ -369,8 +376,11 @@ function _run_cuda_benchmarks_loaded(CUDA, cfg::BenchConfig, cases, rows)
         dims = dims_string(size(case.noisy))
         noisy_gpu = CUDA.CuArray(case.noisy)
 
-        problem =
-            TotalVariationImageFiltering.TVProblem(noisy_gpu; lambda = case.lambda, tv_mode = case.mode)
+        problem = TotalVariationImageFiltering.TVProblem(
+            noisy_gpu;
+            lambda = case.lambda,
+            tv_mode = case.mode,
+        )
         solver_cfg = TotalVariationImageFiltering.ROFConfig(
             maxiter = maxiter,
             tau = 0.1f0,
@@ -397,7 +407,12 @@ function _run_cuda_benchmarks_loaded(CUDA, cfg::BenchConfig, cases, rows)
         trial = run(
             @benchmarkable begin
                 copyto!($u_gpu, $noisy_gpu)
-                TotalVariationImageFiltering.solve!($u_gpu, $problem, $solver_cfg; state = $state)
+                TotalVariationImageFiltering.solve!(
+                    $u_gpu,
+                    $problem,
+                    $solver_cfg;
+                    state = $state,
+                )
                 CUDA.synchronize()
             end samples = cfg.samples evals = cfg.evals
         )

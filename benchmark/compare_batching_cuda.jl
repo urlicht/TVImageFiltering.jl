@@ -133,7 +133,10 @@ function require_cuda!()
     )
     CUDA.functional() ||
         error("CUDA is installed but no functional CUDA device is available.")
-    Base.get_extension(TotalVariationImageFiltering, :TotalVariationImageFilteringCUDAExt) === nothing && error(
+    Base.get_extension(
+        TotalVariationImageFiltering,
+        :TotalVariationImageFilteringCUDAExt,
+    ) === nothing && error(
         "TotalVariationImageFilteringCUDAExt is not active. Ensure CUDA is loaded before TotalVariationImageFiltering.",
     )
     return nothing
@@ -198,12 +201,22 @@ function run_no_batch!(
 )
     @inbounds for i in eachindex(problems)
         copyto!(outputs[i], problems[i].f)
-        TotalVariationImageFiltering.solve!(outputs[i], problems[i], solver_cfg; state = states[i])
+        TotalVariationImageFiltering.solve!(
+            outputs[i],
+            problems[i],
+            solver_cfg;
+            state = states[i],
+        )
     end
     return nothing
 end
 
-function run_batched!(output, problem, solver_cfg::TotalVariationImageFiltering.ROFConfig, state)
+function run_batched!(
+    output,
+    problem,
+    solver_cfg::TotalVariationImageFiltering.ROFConfig,
+    state,
+)
     copyto!(output, problem.f)
     TotalVariationImageFiltering.solve!(output, problem, solver_cfg; state = state)
     return nothing

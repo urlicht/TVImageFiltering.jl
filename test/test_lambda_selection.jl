@@ -43,7 +43,7 @@ using TotalVariationImageFiltering
     cfg3d = TotalVariationImageFiltering.ROFConfig(
         maxiter = 1200,
         tau = 0.04,
-        tol = 1f-5,
+        tol = 1.0f-5,
         check_every = 20,
     )
     sel3d = TotalVariationImageFiltering.select_lambda_discrepancy(
@@ -100,7 +100,10 @@ end
 
 @testset "Lambda Selection Validation" begin
     f = randn(Float64, 8, 8)
-    @test_throws ArgumentError TotalVariationImageFiltering.select_lambda_discrepancy(f; sigma = -1.0)
+    @test_throws ArgumentError TotalVariationImageFiltering.select_lambda_discrepancy(
+        f;
+        sigma = -1.0,
+    )
     @test_throws ArgumentError TotalVariationImageFiltering.select_lambda_sure(
         f;
         sigma = 0.1,
