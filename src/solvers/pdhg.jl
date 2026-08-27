@@ -140,31 +140,21 @@ function _pdhg_operator_norm_sq_upper_bound(
 end
 
 function _validate_poisson_data(f::AbstractArray{T}) where {T<:AbstractFloat}
-    any(.!isfinite.(f)) &&
-        throw(ArgumentError("PoissonFidelity requires finite observation data f"))
+    any(.!isfinite.(f)) && throw(ArgumentError("PoissonFidelity requires finite observation data f"))
     any(f .< zero(T)) &&
         throw(ArgumentError("PoissonFidelity requires non-negative observation data f"))
     return nothing
 end
 
-function _constraint_bounds(
-    ::Type{T},
-    ::NoConstraint,
-) where {T<:AbstractFloat}
+function _constraint_bounds(::Type{T}, ::NoConstraint) where {T<:AbstractFloat}
     return -T(Inf), T(Inf)
 end
 
-function _constraint_bounds(
-    ::Type{T},
-    ::NonnegativeConstraint,
-) where {T<:AbstractFloat}
+function _constraint_bounds(::Type{T}, ::NonnegativeConstraint) where {T<:AbstractFloat}
     return zero(T), T(Inf)
 end
 
-function _constraint_bounds(
-    ::Type{T},
-    constraint::BoxConstraint,
-) where {T<:AbstractFloat}
+function _constraint_bounds(::Type{T}, constraint::BoxConstraint) where {T<:AbstractFloat}
     return T(constraint.lower), T(constraint.upper)
 end
 
@@ -179,7 +169,11 @@ function _constraint_bounds(
     )
 end
 
-function _project_interval!(u::AbstractArray{T}, lower::T, upper::T) where {T<:AbstractFloat}
+function _project_interval!(
+    u::AbstractArray{T},
+    lower::T,
+    upper::T,
+) where {T<:AbstractFloat}
     neg_inf = -T(Inf)
     pos_inf = T(Inf)
 
@@ -207,7 +201,9 @@ end
 function _validate_pdhg_constraint(problem::TVProblem{T,N}) where {T<:AbstractFloat,N}
     lower, upper = _constraint_bounds(T, problem.constraint)
     lower <= upper || throw(
-        ArgumentError("constraint lower bound must be <= upper bound, got [$lower, $upper]"),
+        ArgumentError(
+            "constraint lower bound must be <= upper bound, got [$lower, $upper]",
+        ),
     )
 
     if problem.data_fidelity isa PoissonFidelity
@@ -322,10 +318,12 @@ function _validate_state_shape(
     @inbounds for d = 1:N
         size(state.p[d]) == shape ||
             throw(ArgumentError("state.p[$d] size must match solve buffer size $shape"))
-        size(state.p_prev[d]) == shape ||
-            throw(ArgumentError("state.p_prev[$d] size must match solve buffer size $shape"))
-        size(state.grad_u_bar[d]) == shape ||
-            throw(ArgumentError("state.grad_u_bar[$d] size must match solve buffer size $shape"))
+        size(state.p_prev[d]) == shape || throw(
+            ArgumentError("state.p_prev[$d] size must match solve buffer size $shape"),
+        )
+        size(state.grad_u_bar[d]) == shape || throw(
+            ArgumentError("state.grad_u_bar[$d] size must match solve buffer size $shape"),
+        )
     end
     return nothing
 end
@@ -391,6 +389,10 @@ function solve!(
     state::Union{Nothing,PDHGState{T,N}} = nothing,
 ) where {T<:AbstractFloat,N}
     _validate(config)
+    problem.tv_mode isa GroupSparseTV &&
+        throw(ArgumentError("PDHG does not support GroupSparseTV; use GSTVConfig"))
+    (problem.boundary isa Neumann || problem.boundary isa Periodic) ||
+        throw(ArgumentError("PDHG supports only Neumann and Periodic boundaries"))
     _validate_pdhg_data_fidelity(problem)
     _validate_pdhg_constraint(problem)
     size(u) == size(problem.f) ||
@@ -404,7 +406,13 @@ function solve!(
     local_state === nothing || _validate_state_shape(local_state, size(u))
 
     if problem.lambda == zero(T)
-        _pdhg_data_minimizer!(u, problem.f, problem.data_fidelity, primal_lower, primal_upper)
+        _pdhg_data_minimizer!(
+            u,
+            problem.f,
+            problem.data_fidelity,
+            primal_lower,
+            primal_upper,
+        )
         return SolverStats{T}(0, true, zero(T))
     end
 
@@ -453,17 +461,13 @@ function solve!(
             problem.data_fidelity,
         )
         _project_interval!(local_state.u, primal_lower, primal_upper)
-        @. local_state.u_bar = local_state.u + theta_t * (local_state.u - local_state.u_prev)
+        @. local_state.u_bar =
+            local_state.u + theta_t * (local_state.u - local_state.u_prev)
 
         if (k % config.check_every == 0) || (k == config.maxiter)
             primal_rel_change = _relative_change(local_state.u_prev, local_state.u)
-            pdhg_residual = _pdhg_relative_residual!(
-                local_state,
-                problem,
-                tau_t,
-                sigma_t,
-                inv_spacing,
-            )
+            pdhg_residual =
+                _pdhg_relative_residual!(local_state, problem, tau_t, sigma_t, inv_spacing)
             rel_change = max(primal_rel_change, pdhg_residual)
             if rel_change <= T(config.tol)
                 converged = true

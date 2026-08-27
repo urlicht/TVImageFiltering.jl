@@ -14,5 +14,6 @@ CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 TotalVariationImageFilteringCUDAExt = "CUDA"
 
 [compat]
+CUDA = "5, 6"
 julia = "1.11"
 Random = "1"

@@ -12,7 +12,12 @@ function tv_seminorm(
 ) where {T<:AbstractFloat,N}
     g = TotalVariationImageFiltering.allocate_dual(u)
     inv_spacing = ntuple(d -> inv(spacing[d]), Val(N))
-    TotalVariationImageFiltering.gradient!(g, u, TotalVariationImageFiltering.Neumann(), inv_spacing)
+    TotalVariationImageFiltering.gradient!(
+        g,
+        u,
+        TotalVariationImageFiltering.Neumann(),
+        inv_spacing,
+    )
 
     total = zero(T)
     if tv_mode isa TotalVariationImageFiltering.IsotropicTV
@@ -77,9 +82,14 @@ function sample_poisson_normalized(
 end
 
 @testset "PDHG Internal Helpers" begin
-    @test TotalVariationImageFiltering._pdhg_operator_norm_sq_upper_bound((1.0, 2.0, 3.0), (8, 1, 5)) ==
-          40.0
-    @test TotalVariationImageFiltering._pdhg_operator_norm_sq_upper_bound((1.0, 2.0), (1, 1)) == 0.0
+    @test TotalVariationImageFiltering._pdhg_operator_norm_sq_upper_bound(
+        (1.0, 2.0, 3.0),
+        (8, 1, 5),
+    ) == 40.0
+    @test TotalVariationImageFiltering._pdhg_operator_norm_sq_upper_bound(
+        (1.0, 2.0),
+        (1, 1),
+    ) == 0.0
 end
 
 @testset "PDHG Primal Residual Sign Convention" begin
@@ -106,10 +116,21 @@ end
     delta_u = state.u_prev .- state.u
     delta_p = (state.p_prev[1] .- state.p[1],)
     div_delta_p = similar(f)
-    TotalVariationImageFiltering.divergence!(div_delta_p, delta_p, problem.boundary, inv_spacing)
+    TotalVariationImageFiltering.divergence!(
+        div_delta_p,
+        delta_p,
+        problem.boundary,
+        inv_spacing,
+    )
     expected_primal = delta_u ./ tau .+ div_delta_p
 
-    _ = TotalVariationImageFiltering._pdhg_relative_residual!(state, problem, tau, sigma, inv_spacing)
+    _ = TotalVariationImageFiltering._pdhg_relative_residual!(
+        state,
+        problem,
+        tau,
+        sigma,
+        inv_spacing,
+    )
     @test isapprox(state.primal_tmp, expected_primal; atol = 1e-12, rtol = 0.0)
 end
 
@@ -146,6 +167,38 @@ end
     @test maximum(abs.(u_pdhg .- u_rof)) <= 1e-2
 end
 
+@testset "PDHG Periodic L2 Matches ROF" begin
+    Random.seed!(73)
+    f = randn(20, 16)
+    problem = TotalVariationImageFiltering.TVProblem(
+        f;
+        lambda = 0.12,
+        boundary = TotalVariationImageFiltering.Periodic(),
+    )
+    u_rof, stats_rof = TotalVariationImageFiltering.solve(
+        problem,
+        TotalVariationImageFiltering.ROFConfig(
+            maxiter = 5000,
+            tau = 0.05,
+            tol = 1e-8,
+            check_every = 20,
+        ),
+    )
+    u_pdhg, stats_pdhg = TotalVariationImageFiltering.solve(
+        problem,
+        TotalVariationImageFiltering.PDHGConfig(
+            maxiter = 5000,
+            tau = 0.2,
+            sigma = 0.2,
+            tol = 1e-7,
+            check_every = 20,
+        ),
+    )
+    @test stats_rof.converged
+    @test stats_pdhg.converged
+    @test isapprox(u_pdhg, u_rof; atol = 2e-5, rtol = 0)
+end
+
 @testset "PDHG Poisson Fidelity" begin
     Random.seed!(73)
     f = rand(Float64, 28, 20) .* 2 .+ 0.2
@@ -174,9 +227,13 @@ end
     @test minimum(u) >= -1e-10
     @test obj_final <= obj_initial + 1e-4
 
-    prob_lambda0 =
-        TotalVariationImageFiltering.TVProblem(f; lambda = 0.0, data_fidelity = TotalVariationImageFiltering.PoissonFidelity())
-    u0, stats0 = TotalVariationImageFiltering.solve(prob_lambda0, cfg; init = fill(7.0, size(f)))
+    prob_lambda0 = TotalVariationImageFiltering.TVProblem(
+        f;
+        lambda = 0.0,
+        data_fidelity = TotalVariationImageFiltering.PoissonFidelity(),
+    )
+    u0, stats0 =
+        TotalVariationImageFiltering.solve(prob_lambda0, cfg; init = fill(7.0, size(f)))
     @test u0 == f
     @test stats0.iterations == 0
     @test stats0.converged
@@ -224,8 +281,11 @@ end
         data_fidelity = TotalVariationImageFiltering.L2Fidelity(),
         constraint = box,
     )
-    u_box0, st_box0 =
-        TotalVariationImageFiltering.solve(prob_box_lambda0, cfg; init = fill(4.0, size(f_l2)))
+    u_box0, st_box0 = TotalVariationImageFiltering.solve(
+        prob_box_lambda0,
+        cfg;
+        init = fill(4.0, size(f_l2)),
+    )
     @test st_box0.iterations == 0
     @test st_box0.converged
     @test st_box0.rel_change == 0.0
@@ -239,7 +299,8 @@ end
         data_fidelity = TotalVariationImageFiltering.PoissonFidelity(),
         constraint = pbox,
     )
-    u_poisson_box, st_poisson_box = TotalVariationImageFiltering.solve(prob_poisson_box, cfg)
+    u_poisson_box, st_poisson_box =
+        TotalVariationImageFiltering.solve(prob_poisson_box, cfg)
     @test st_poisson_box.converged
     @test minimum(u_poisson_box) >= pbox.lower - 1e-10
     @test maximum(u_poisson_box) <= pbox.upper + 1e-10
@@ -250,8 +311,11 @@ end
         data_fidelity = TotalVariationImageFiltering.PoissonFidelity(),
         constraint = pbox,
     )
-    u_poisson_box0, st_poisson_box0 =
-        TotalVariationImageFiltering.solve(prob_poisson_box_lambda0, cfg; init = fill(2.0, size(f_poisson)))
+    u_poisson_box0, st_poisson_box0 = TotalVariationImageFiltering.solve(
+        prob_poisson_box_lambda0,
+        cfg;
+        init = fill(2.0, size(f_poisson)),
+    )
     @test st_poisson_box0.iterations == 0
     @test st_poisson_box0.converged
     @test st_poisson_box0.rel_change == 0.0
@@ -280,7 +344,11 @@ end
         data_fidelity = TotalVariationImageFiltering.PoissonFidelity(),
         constraint = TotalVariationImageFiltering.BoxConstraint(-1.0, 0.0),
     )
-    u_zero, st_zero = TotalVariationImageFiltering.solve(feasible_zero, cfg; init = fill(9.0, size(zero_data)))
+    u_zero, st_zero = TotalVariationImageFiltering.solve(
+        feasible_zero,
+        cfg;
+        init = fill(9.0, size(zero_data)),
+    )
     @test st_zero.iterations == 0
     @test st_zero.converged
     @test u_zero == zero_data
@@ -314,7 +382,12 @@ end
     )
     state = TotalVariationImageFiltering.PDHGState(f)
     u1, s1 = TotalVariationImageFiltering.solve(prob, cfg; state = state)
-    u2, s2 = TotalVariationImageFiltering.solve(prob, cfg; init = fill(3.0, size(f)), state = state)
+    u2, s2 = TotalVariationImageFiltering.solve(
+        prob,
+        cfg;
+        init = fill(3.0, size(f)),
+        state = state,
+    )
     @test s1.converged
     @test s2.converged
     @test maximum(abs.(u1 .- u2)) <= 1e-5
@@ -326,12 +399,19 @@ end
     )
     @test_throws ArgumentError TotalVariationImageFiltering.solve(bad_poisson_prob, cfg)
 
-    bad_fidelity_prob =
-        TotalVariationImageFiltering.TVProblem(f; lambda = 0.2, data_fidelity = DummyFidelityForPDHG())
+    bad_fidelity_prob = TotalVariationImageFiltering.TVProblem(
+        f;
+        lambda = 0.2,
+        data_fidelity = DummyFidelityForPDHG(),
+    )
     @test_throws ArgumentError TotalVariationImageFiltering.solve(bad_fidelity_prob, cfg)
 
     bad_state = TotalVariationImageFiltering.PDHGState(randn(12))
-    @test_throws ArgumentError TotalVariationImageFiltering.solve(prob, cfg; state = bad_state)
+    @test_throws ArgumentError TotalVariationImageFiltering.solve(
+        prob,
+        cfg;
+        state = bad_state,
+    )
 
     # Bypass keyword constructor checks by calling the positional struct constructor directly.
     negative_lambda_prob = TotalVariationImageFiltering.TVProblem(
@@ -417,7 +497,10 @@ end
     @test minimum(u_batch_constrained) >= constrained_box.lower - 1e-10
     @test maximum(u_batch_constrained) <= constrained_box.upper + 1e-10
 
-    states = [TotalVariationImageFiltering.PDHGState(selectdim(f_batch, 3, b)) for b = 1:size(f_batch, 3)]
+    states = [
+        TotalVariationImageFiltering.PDHGState(selectdim(f_batch, 3, b)) for
+        b = 1:size(f_batch, 3)
+    ]
     u1, st1 = TotalVariationImageFiltering.solve_batch(
         f_batch,
         config;
@@ -437,7 +520,11 @@ end
     @test st2.converged
     @test maximum(abs.(u1 .- u2)) <= 1e-5
 
-    @test_throws ArgumentError TotalVariationImageFiltering.solve_batch(randn(8), config; lambda = 0.1)
+    @test_throws ArgumentError TotalVariationImageFiltering.solve_batch(
+        randn(8),
+        config;
+        lambda = 0.1,
+    )
     @test_throws ArgumentError TotalVariationImageFiltering.solve_batch(
         f_batch,
         config;
@@ -489,10 +576,11 @@ end
     u_poisson, st_poisson = TotalVariationImageFiltering.solve(prob_poisson, cfg)
     u_l2, st_l2 = TotalVariationImageFiltering.solve(prob_l2, cfg)
 
-    obj_poisson = poisson_data_term(u_poisson, noisy) +
-                  lambda * tv_seminorm(u_poisson, prob_poisson.spacing, mode)
-    obj_l2_in_poisson_metric = poisson_data_term(u_l2, noisy) +
-                               lambda * tv_seminorm(u_l2, prob_l2.spacing, mode)
+    obj_poisson =
+        poisson_data_term(u_poisson, noisy) +
+        lambda * tv_seminorm(u_poisson, prob_poisson.spacing, mode)
+    obj_l2_in_poisson_metric =
+        poisson_data_term(u_l2, noisy) + lambda * tv_seminorm(u_l2, prob_l2.spacing, mode)
     mse_poisson = mean(abs2, u_poisson .- clean)
     mse_l2 = mean(abs2, u_l2 .- clean)
 

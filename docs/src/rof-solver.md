@@ -44,7 +44,8 @@ Here `\Pi_{\mathcal{B}}` is projection onto the TV dual unit ball:
 
 ## Discretization Used in This Package
 
-- `gradient!`: forward differences with homogeneous Neumann boundary on the upper edge.
+- `gradient!`: forward differences with either homogeneous `Neumann()` or wrapped
+  `Periodic()` boundary handling.
 - `divergence!`: backward-difference adjoint consistent with `gradient!`.
 - `spacing`: all differential operators are scaled by `1 / spacing[d]`.
 

@@ -96,7 +96,10 @@ function _relative_change(
     return T(sqrt(sum(abs2, u .- u_prev)) / max(sqrt(sum(abs2, u_prev)), eps(T)))
 end
 
-function _validate_state_shape(state::ROFState{T,N}, shape::NTuple{N,Int}) where {T<:AbstractFloat,N}
+function _validate_state_shape(
+    state::ROFState{T,N},
+    shape::NTuple{N,Int},
+) where {T<:AbstractFloat,N}
     size(state.u) == shape ||
         throw(ArgumentError("state.u size must match solve buffer size $shape"))
     size(state.u_prev) == shape ||
@@ -109,8 +112,9 @@ function _validate_state_shape(state::ROFState{T,N}, shape::NTuple{N,Int}) where
     @inbounds for d = 1:N
         size(state.p[d]) == shape ||
             throw(ArgumentError("state.p[$d] size must match solve buffer size $shape"))
-        size(state.grad_g[d]) == shape ||
-            throw(ArgumentError("state.grad_g[$d] size must match solve buffer size $shape"))
+        size(state.grad_g[d]) == shape || throw(
+            ArgumentError("state.grad_g[$d] size must match solve buffer size $shape"),
+        )
     end
     return nothing
 end
@@ -188,8 +192,9 @@ where `Proj_B` is projection onto the TV dual unit ball:
 - isotropic TV: `||p[i]||_2 <= 1` per pixel/voxel,
 - anisotropic TV: `|p[d][i]| <= 1` per component.
 
-`gradient!` and `divergence!` use forward/backward finite differences with
-homogeneous Neumann boundary handling and account for `problem.spacing`.
+`gradient!` and `divergence!` use forward/backward finite differences with the
+selected `Neumann` or `Periodic` boundary handling and account for
+`problem.spacing`.
 
 References:
 - L. I. Rudin, S. Osher, E. Fatemi, "Nonlinear total variation based noise
@@ -213,8 +218,10 @@ function solve!(
             "ROF currently supports only unconstrained problems; set constraint = NoConstraint() or use PDHGConfig",
         ),
     )
-    problem.boundary isa Neumann ||
-        throw(ArgumentError("ROF currently supports only Neumann boundary"))
+    problem.tv_mode isa GroupSparseTV &&
+        throw(ArgumentError("ROF does not support GroupSparseTV; use GSTVConfig"))
+    (problem.boundary isa Neumann || problem.boundary isa Periodic) ||
+        throw(ArgumentError("ROF supports only Neumann and Periodic boundaries"))
     size(u) == size(problem.f) ||
         throw(ArgumentError("You must have the same size as problem.f"))
     problem.lambda >= zero(T) ||

@@ -13,7 +13,8 @@ function exact_rof_two_pixel(f1::Real, f2::Real, lambda::Real, spacing::Real)
 end
 
 @testset "ROF Internal Helpers" begin
-    @test TotalVariationImageFiltering._tau_upper_bound((1.0, 2.0, 3.0), (8, 1, 5)) == 1 / 20
+    @test TotalVariationImageFiltering._tau_upper_bound((1.0, 2.0, 3.0), (8, 1, 5)) ==
+          1 / 20
     @test TotalVariationImageFiltering._tau_upper_bound((1.0, 2.0), (1, 1)) == Inf
 
     u_prev = [1.0, 2.0, 3.0]
@@ -52,7 +53,10 @@ end
         check_every = 20,
     )
 
-    for mode in (TotalVariationImageFiltering.AnisotropicTV(), TotalVariationImageFiltering.IsotropicTV())
+    for mode in (
+        TotalVariationImageFiltering.AnisotropicTV(),
+        TotalVariationImageFiltering.IsotropicTV(),
+    )
         for (f1, f2, lambda, spacing) in
             ((-1.3, 2.4, 0.5, 1.0), (0.2, 0.8, 1.0, 2.0), (3.0, -2.0, 0.1, 0.5))
             f = [f1, f2]
@@ -80,8 +84,16 @@ end
         check_every = 10,
     )
 
-    for mode in (TotalVariationImageFiltering.AnisotropicTV(), TotalVariationImageFiltering.IsotropicTV())
-        prob = TotalVariationImageFiltering.TVProblem(f; lambda = 1.0, spacing = 0.3, tv_mode = mode)
+    for mode in (
+        TotalVariationImageFiltering.AnisotropicTV(),
+        TotalVariationImageFiltering.IsotropicTV(),
+    )
+        prob = TotalVariationImageFiltering.TVProblem(
+            f;
+            lambda = 1.0,
+            spacing = 0.3,
+            tv_mode = mode,
+        )
         u, stats = TotalVariationImageFiltering.solve(prob, config)
         @test stats.converged
         @test maximum(abs.(u .- f)) <= 1e-10
@@ -92,20 +104,36 @@ end
     Random.seed!(37)
     f = randn(8, 8)
     prob = TotalVariationImageFiltering.TVProblem(f; lambda = 0.2)
-    fine_prob = TotalVariationImageFiltering.TVProblem(f; lambda = 0.2, spacing = (0.5, 1.0))
+    fine_prob =
+        TotalVariationImageFiltering.TVProblem(f; lambda = 0.2, spacing = (0.5, 1.0))
 
     @test_throws ArgumentError TotalVariationImageFiltering.solve(
         prob,
-        TotalVariationImageFiltering.ROFConfig(maxiter = 10, tau = 0.25, tol = 0.0, check_every = 1),
+        TotalVariationImageFiltering.ROFConfig(
+            maxiter = 10,
+            tau = 0.25,
+            tol = 0.0,
+            check_every = 1,
+        ),
     )
     @test_throws ArgumentError TotalVariationImageFiltering.solve(
         fine_prob,
-        TotalVariationImageFiltering.ROFConfig(maxiter = 10, tau = 0.1, tol = 0.0, check_every = 1),
+        TotalVariationImageFiltering.ROFConfig(
+            maxiter = 10,
+            tau = 0.1,
+            tol = 0.0,
+            check_every = 1,
+        ),
     )
 
     u, stats = TotalVariationImageFiltering.solve(
         prob,
-        TotalVariationImageFiltering.ROFConfig(maxiter = 500, tau = 0.2, tol = 1e-6, check_every = 10),
+        TotalVariationImageFiltering.ROFConfig(
+            maxiter = 500,
+            tau = 0.2,
+            tol = 1e-6,
+            check_every = 10,
+        ),
     )
     @test size(u) == size(f)
     @test stats.iterations <= 500
@@ -146,7 +174,12 @@ end
     prob = TotalVariationImageFiltering.TVProblem(f; lambda = 0.4, spacing = (0.5, 2.0))
     u, stats = TotalVariationImageFiltering.solve(
         prob,
-        TotalVariationImageFiltering.ROFConfig(maxiter = 10, tau = 100.0, tol = 0.0, check_every = 1),
+        TotalVariationImageFiltering.ROFConfig(
+            maxiter = 10,
+            tau = 100.0,
+            tol = 0.0,
+            check_every = 1,
+        ),
     )
     @test u == f
     @test stats.converged
@@ -167,8 +200,12 @@ end
     state = TotalVariationImageFiltering.ROFState(f2)
 
     u1, stats1 = TotalVariationImageFiltering.solve(prob2, cfg; state = state)
-    u2, stats2 =
-        TotalVariationImageFiltering.solve(prob2, cfg; init = fill(5.0, size(f2)), state = state)
+    u2, stats2 = TotalVariationImageFiltering.solve(
+        prob2,
+        cfg;
+        init = fill(5.0, size(f2)),
+        state = state,
+    )
     @test stats1.converged
     @test stats2.converged
     @test maximum(abs.(u1 .- u2)) <= 1e-7
@@ -176,8 +213,11 @@ end
 
 @testset "ROF Error Paths" begin
     f = randn(8)
-    bad_fidelity_prob =
-        TotalVariationImageFiltering.TVProblem(f; lambda = 0.2, data_fidelity = DummyFidelityForROF())
+    bad_fidelity_prob = TotalVariationImageFiltering.TVProblem(
+        f;
+        lambda = 0.2,
+        data_fidelity = DummyFidelityForROF(),
+    )
     @test_throws ArgumentError TotalVariationImageFiltering.solve(bad_fidelity_prob)
 
     constrained_prob = TotalVariationImageFiltering.TVProblem(
@@ -187,8 +227,11 @@ end
     )
     @test_throws ArgumentError TotalVariationImageFiltering.solve(constrained_prob)
 
-    bad_boundary_prob =
-        TotalVariationImageFiltering.TVProblem(f; lambda = 0.2, boundary = DummyBoundaryForROF())
+    bad_boundary_prob = TotalVariationImageFiltering.TVProblem(
+        f;
+        lambda = 0.2,
+        boundary = DummyBoundaryForROF(),
+    )
     @test_throws ArgumentError TotalVariationImageFiltering.solve(bad_boundary_prob)
 
     mismatch_prob = TotalVariationImageFiltering.TVProblem(randn(6); lambda = 0.2)

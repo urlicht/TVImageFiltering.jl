@@ -12,6 +12,7 @@ import TotalVariationImageFiltering:
     IsotropicTV,
     L2Fidelity,
     Neumann,
+    Periodic,
     PDHGConfig,
     PDHGState,
     PoissonFidelity,
@@ -20,6 +21,7 @@ import TotalVariationImageFiltering:
     SolverStats,
     divergence!,
     gradient!,
+    _group_sum_axis!,
     project_dual_ball!,
     solve!,
     solve_batch!
@@ -57,6 +59,64 @@ function _divergence_dim_kernel!(out, pd, scale, stride_d::Int, n_d::Int, len::I
             acc -= scale * pd[i-stride_d]
         end
         @inbounds out[i] += acc
+    end
+    return nothing
+end
+
+function _gradient_periodic_dim_kernel!(gd, u, scale, stride_d::Int, n_d::Int, len::Int)
+    index = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    if index <= len
+        i = Int(index)
+        coord_d = ((i - 1) ÷ stride_d) % n_d + 1
+        @inbounds if n_d == 1
+            gd[i] = zero(scale)
+        elseif coord_d < n_d
+            gd[i] = scale * (u[i+stride_d] - u[i])
+        else
+            gd[i] = scale * (u[i-(n_d-1)*stride_d] - u[i])
+        end
+    end
+    return nothing
+end
+
+function _divergence_periodic_dim_kernel!(out, pd, scale, stride_d::Int, n_d::Int, len::Int)
+    index = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    if index <= len
+        i = Int(index)
+        coord_d = ((i - 1) ÷ stride_d) % n_d + 1
+        @inbounds if n_d > 1
+            previous = coord_d > 1 ? pd[i-stride_d] : pd[i+(n_d-1)*stride_d]
+            out[i] += scale * (pd[i] - previous)
+        end
+    end
+    return nothing
+end
+
+function _group_sum_axis_kernel!(
+    out,
+    input,
+    stride_d::Int,
+    n_d::Int,
+    first_offset::Int,
+    last_offset::Int,
+    periodic::Bool,
+    len::Int,
+)
+    index = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    if index <= len
+        i = Int(index)
+        coord_d = ((i - 1) ÷ stride_d) % n_d + 1
+        acc = zero(eltype(input))
+        @inbounds for offset = first_offset:last_offset
+            source_coord = coord_d + offset
+            if periodic
+                source_coord = mod(source_coord - 1, n_d) + 1
+                acc += input[i+(source_coord-coord_d)*stride_d]
+            elseif 1 <= source_coord <= n_d
+                acc += input[i+offset*stride_d]
+            end
+        end
+        @inbounds out[i] = acc
     end
     return nothing
 end
@@ -278,6 +338,39 @@ function _gradient_spatial!(
     return g
 end
 
+function _gradient_spatial!(
+    g::NTuple{M,AT},
+    u::CUDA.CuArray{T,N},
+    inv_spacing::NTuple{M,S},
+    ::Periodic,
+) where {T<:AbstractFloat,N,M,S<:Real,AT<:CUDA.CuArray{T,N}}
+    len = length(u)
+    len == 0 && return g
+
+    threads, blocks = _launch_config(len)
+    strides = ntuple(d -> stride(u, d), Val(M))
+    @inbounds for d = 1:M
+        CUDA.@cuda threads = threads blocks = blocks _gradient_periodic_dim_kernel!(
+            g[d],
+            u,
+            T(inv_spacing[d]),
+            strides[d],
+            size(u, d),
+            len,
+        )
+    end
+    return g
+end
+
+function _gradient_spatial!(
+    g::NTuple{M,AT},
+    u::CUDA.CuArray{T,N},
+    inv_spacing::NTuple{M,S},
+    ::Neumann,
+) where {T<:AbstractFloat,N,M,S<:Real,AT<:CUDA.CuArray{T,N}}
+    return _gradient_spatial!(g, u, inv_spacing)
+end
+
 function _divergence_spatial!(
     out::CUDA.CuArray{T,N},
     p::NTuple{M,AT},
@@ -302,6 +395,40 @@ function _divergence_spatial!(
     end
 
     return out
+end
+
+function _divergence_spatial!(
+    out::CUDA.CuArray{T,N},
+    p::NTuple{M,AT},
+    inv_spacing::NTuple{M,S},
+    ::Periodic,
+) where {T<:AbstractFloat,N,M,S<:Real,AT<:CUDA.CuArray{T,N}}
+    fill!(out, zero(T))
+    len = length(out)
+    len == 0 && return out
+
+    threads, blocks = _launch_config(len)
+    strides = ntuple(d -> stride(out, d), Val(M))
+    @inbounds for d = 1:M
+        CUDA.@cuda threads = threads blocks = blocks _divergence_periodic_dim_kernel!(
+            out,
+            p[d],
+            T(inv_spacing[d]),
+            strides[d],
+            size(out, d),
+            len,
+        )
+    end
+    return out
+end
+
+function _divergence_spatial!(
+    out::CUDA.CuArray{T,N},
+    p::NTuple{M,AT},
+    inv_spacing::NTuple{M,S},
+    ::Neumann,
+) where {T<:AbstractFloat,N,M,S<:Real,AT<:CUDA.CuArray{T,N}}
+    return _divergence_spatial!(out, p, inv_spacing)
 end
 
 function _pdhg_dual_update!(
@@ -382,7 +509,7 @@ end
 
 function _pdhg_relative_residual_cuda!(
     state::PDHGState{T,N},
-    boundary::Neumann,
+    boundary::AbstractBoundaryCondition,
     tau::T,
     sigma::T,
     inv_spacing::NTuple{N,T},
@@ -425,6 +552,70 @@ function divergence!(
     inv_spacing::NTuple{N,S},
 ) where {T<:AbstractFloat,N,S<:Real,AT<:CUDA.CuArray{T,N}}
     return _divergence_spatial!(out, p, inv_spacing)
+end
+
+function gradient!(
+    g::NTuple{N,AT},
+    u::CUDA.CuArray{T,N},
+    boundary::Periodic,
+    inv_spacing::NTuple{N,S},
+) where {T<:AbstractFloat,N,S<:Real,AT<:CUDA.CuArray{T,N}}
+    return _gradient_spatial!(g, u, inv_spacing, boundary)
+end
+
+function divergence!(
+    out::CUDA.CuArray{T,N},
+    p::NTuple{N,AT},
+    boundary::Periodic,
+    inv_spacing::NTuple{N,S},
+) where {T<:AbstractFloat,N,S<:Real,AT<:CUDA.CuArray{T,N}}
+    return _divergence_spatial!(out, p, inv_spacing, boundary)
+end
+
+function _group_sum_axis_cuda!(
+    out::CUDA.CuArray{T,N},
+    input::CUDA.CuArray{T,N},
+    d::Int,
+    first_offset::Int,
+    last_offset::Int,
+    periodic::Bool,
+) where {T,N}
+    len = length(input)
+    len == 0 && return out
+    threads, blocks = _launch_config(len)
+    CUDA.@cuda threads = threads blocks = blocks _group_sum_axis_kernel!(
+        out,
+        input,
+        stride(input, d),
+        size(input, d),
+        first_offset,
+        last_offset,
+        periodic,
+        len,
+    )
+    return out
+end
+
+function _group_sum_axis!(
+    out::CUDA.CuArray{T,N},
+    input::CUDA.CuArray{T,N},
+    d::Int,
+    first_offset::Int,
+    last_offset::Int,
+    ::Neumann,
+) where {T,N}
+    return _group_sum_axis_cuda!(out, input, d, first_offset, last_offset, false)
+end
+
+function _group_sum_axis!(
+    out::CUDA.CuArray{T,N},
+    input::CUDA.CuArray{T,N},
+    d::Int,
+    first_offset::Int,
+    last_offset::Int,
+    ::Periodic,
+) where {T,N}
+    return _group_sum_axis_cuda!(out, input, d, first_offset, last_offset, true)
 end
 
 function project_dual_ball!(
@@ -500,6 +691,7 @@ function _rof_batch_dual_step!(
     lambda::T,
     inv_spacing::NTuple{M,T},
     tv_mode::AbstractTVMode,
+    boundary::AbstractBoundaryCondition,
     done_mask::CUDA.CuArray{UInt8,1},
     has_done::Bool,
     batch_stride::Int,
@@ -507,10 +699,10 @@ function _rof_batch_dual_step!(
 ) where {T<:AbstractFloat,N,M}
     inv_lambda = inv(lambda)
 
-    _divergence_spatial!(state.divp, state.p, inv_spacing)
+    _divergence_spatial!(state.divp, state.p, inv_spacing, boundary)
     @. state.g = state.divp - inv_lambda * f_batch
 
-    _gradient_spatial!(state.grad_g, state.g, inv_spacing)
+    _gradient_spatial!(state.grad_g, state.g, inv_spacing, boundary)
     if has_done
         len = length(state.p[1])
         len > 0 && batch_size > 0 && batch_stride > 0 || return nothing
@@ -534,7 +726,7 @@ function _rof_batch_dual_step!(
 
     project_dual_ball!(state.p, one(T), tv_mode)
 
-    _divergence_spatial!(state.divp, state.p, inv_spacing)
+    _divergence_spatial!(state.divp, state.p, inv_spacing, boundary)
     @. state.u = f_batch - lambda * state.divp
     return nothing
 end
@@ -563,11 +755,8 @@ function _batch_stats_result(
     converged_all::Bool,
     return_per_item_stats::Bool,
 ) where {T<:AbstractFloat}
-    summary_stats = SolverStats{T}(
-        maximum(iterations_per_slice),
-        converged_all,
-        maximum(rel_changes),
-    )
+    summary_stats =
+        SolverStats{T}(maximum(iterations_per_slice), converged_all, maximum(rel_changes))
     if return_per_item_stats
         per_item_stats = Vector{SolverStats{T}}(undef, length(iterations_per_slice))
         @inbounds for b = 1:length(iterations_per_slice)
@@ -613,8 +802,8 @@ function solve_batch!(
             "ROF currently supports only unconstrained problems; set constraint = NoConstraint() or use PDHGConfig",
         ),
     )
-    boundary isa Neumann ||
-        throw(ArgumentError("ROF batch CUDA currently supports only Neumann boundary"))
+    (boundary isa Neumann || boundary isa Periodic) ||
+        throw(ArgumentError("ROF batch CUDA supports only Neumann and Periodic boundaries"))
 
     lambda_t = T(lambda)
     lambda_t >= zero(T) || throw(ArgumentError("lambda must be non-negative"))
@@ -624,7 +813,8 @@ function solve_batch!(
     end
 
     spatial_ndims = N - 1
-    spacing_t = TotalVariationImageFiltering._normalize_spacing(T, Val(spatial_ndims), spacing)
+    spacing_t =
+        TotalVariationImageFiltering._normalize_spacing(T, Val(spatial_ndims), spacing)
     inv_spacing = ntuple(d -> inv(spacing_t[d]), Val(spatial_ndims))
     shape_spatial = ntuple(d -> size(f_batch, d), Val(spatial_ndims))
 
@@ -666,6 +856,7 @@ function solve_batch!(
             lambda_t,
             inv_spacing,
             tv_mode,
+            boundary,
             done_device,
             has_done,
             batch_stride,
@@ -736,8 +927,10 @@ function solve!(
     TotalVariationImageFiltering._validate(config)
     TotalVariationImageFiltering._validate_pdhg_data_fidelity(problem)
     TotalVariationImageFiltering._validate_pdhg_constraint(problem)
-    problem.boundary isa Neumann ||
-        throw(ArgumentError("PDHG CUDA currently supports only Neumann boundary"))
+    problem.tv_mode isa TotalVariationImageFiltering.GroupSparseTV &&
+        throw(ArgumentError("PDHG does not support GroupSparseTV; use GSTVConfig"))
+    (problem.boundary isa Neumann || problem.boundary isa Periodic) ||
+        throw(ArgumentError("PDHG CUDA supports only Neumann and Periodic boundaries"))
     size(u) == size(problem.f) ||
         throw(ArgumentError("You must have the same size as problem.f"))
     problem.lambda >= zero(T) ||
@@ -746,7 +939,8 @@ function solve!(
     primal_lower, primal_upper = TotalVariationImageFiltering._pdhg_primal_bounds(problem)
 
     local_state = state === nothing ? nothing : state
-    local_state === nothing || TotalVariationImageFiltering._validate_state_shape(local_state, size(u))
+    local_state === nothing ||
+        TotalVariationImageFiltering._validate_state_shape(local_state, size(u))
 
     if problem.lambda == zero(T)
         TotalVariationImageFiltering._pdhg_data_minimizer!(
@@ -766,7 +960,10 @@ function solve!(
     theta_t = T(config.theta)
     inv_spacing = ntuple(d -> inv(problem.spacing[d]), Val(N))
 
-    op_norm_sq = TotalVariationImageFiltering._pdhg_operator_norm_sq_upper_bound(inv_spacing, size(problem.f))
+    op_norm_sq = TotalVariationImageFiltering._pdhg_operator_norm_sq_upper_bound(
+        inv_spacing,
+        size(problem.f),
+    )
     if op_norm_sq > zero(T)
         tau_t * sigma_t * op_norm_sq < one(T) || throw(
             ArgumentError(
@@ -788,11 +985,16 @@ function solve!(
             copyto!(local_state.p_prev[d], local_state.p[d])
         end
 
-        _gradient_spatial!(local_state.grad_u_bar, local_state.u_bar, inv_spacing)
+        _gradient_spatial!(
+            local_state.grad_u_bar,
+            local_state.u_bar,
+            inv_spacing,
+            problem.boundary,
+        )
         _pdhg_dual_update!(local_state.p, local_state.grad_u_bar, sigma_t)
         project_dual_ball!(local_state.p, problem.lambda, problem.tv_mode)
 
-        _divergence_spatial!(local_state.divp, local_state.p, inv_spacing)
+        _divergence_spatial!(local_state.divp, local_state.p, inv_spacing, problem.boundary)
         _pdhg_primal_and_overrelax!(
             local_state,
             problem.f,
@@ -804,7 +1006,10 @@ function solve!(
         )
 
         if (k % config.check_every == 0) || (k == config.maxiter)
-            primal_rel_change = TotalVariationImageFiltering._relative_change(local_state.u_prev, local_state.u)
+            primal_rel_change = TotalVariationImageFiltering._relative_change(
+                local_state.u_prev,
+                local_state.u,
+            )
             pdhg_residual = _pdhg_relative_residual_cuda!(
                 local_state,
                 problem.boundary,
@@ -907,6 +1112,7 @@ function _pdhg_batch_step!(
     inv_spacing::NTuple{M,T},
     data_fidelity::AbstractDataFidelity,
     tv_mode::AbstractTVMode,
+    boundary::AbstractBoundaryCondition,
     done_mask::CUDA.CuArray{UInt8,1},
     has_done::Bool,
     batch_stride::Int,
@@ -916,7 +1122,7 @@ function _pdhg_batch_step!(
         copyto!(state.p_prev[d], state.p[d])
     end
 
-    _gradient_spatial!(state.grad_u_bar, state.u_bar, inv_spacing)
+    _gradient_spatial!(state.grad_u_bar, state.u_bar, inv_spacing, boundary)
     if has_done
         len = length(state.p[1])
         len > 0 && batch_size > 0 && batch_stride > 0 || return nothing
@@ -937,7 +1143,7 @@ function _pdhg_batch_step!(
     end
 
     project_dual_ball!(state.p, lambda, tv_mode)
-    _divergence_spatial!(state.divp, state.p, inv_spacing)
+    _divergence_spatial!(state.divp, state.p, inv_spacing, boundary)
 
     len = length(state.u)
     len == 0 && return nothing
@@ -1084,8 +1290,11 @@ function solve_batch!(
     end
 
     TotalVariationImageFiltering._validate(config)
-    boundary isa Neumann ||
-        throw(ArgumentError("PDHG batch CUDA currently supports only Neumann boundary"))
+    tv_mode isa TotalVariationImageFiltering.GroupSparseTV &&
+        throw(ArgumentError("PDHG does not support GroupSparseTV; use GSTVConfig"))
+    (boundary isa Neumann || boundary isa Periodic) || throw(
+        ArgumentError("PDHG batch CUDA supports only Neumann and Periodic boundaries"),
+    )
     if data_fidelity isa PoissonFidelity
         TotalVariationImageFiltering._validate_poisson_data(f_batch)
     elseif !(data_fidelity isa L2Fidelity)
@@ -1098,7 +1307,8 @@ function solve_batch!(
 
     lambda_t = T(lambda)
     lambda_t >= zero(T) || throw(ArgumentError("lambda must be non-negative"))
-    primal_lower, primal_upper = _batch_pdhg_primal_bounds(f_batch, data_fidelity, constraint)
+    primal_lower, primal_upper =
+        _batch_pdhg_primal_bounds(f_batch, data_fidelity, constraint)
     if lambda_t == zero(T)
         TotalVariationImageFiltering._pdhg_data_minimizer!(
             u_batch,
@@ -1111,14 +1321,18 @@ function solve_batch!(
     end
 
     spatial_ndims = N - 1
-    spacing_t = TotalVariationImageFiltering._normalize_spacing(T, Val(spatial_ndims), spacing)
+    spacing_t =
+        TotalVariationImageFiltering._normalize_spacing(T, Val(spatial_ndims), spacing)
     inv_spacing = ntuple(d -> inv(spacing_t[d]), Val(spatial_ndims))
     shape_spatial = ntuple(d -> size(f_batch, d), Val(spatial_ndims))
 
     tau_t = T(config.tau)
     sigma_t = T(config.sigma)
     theta_t = T(config.theta)
-    op_norm_sq = TotalVariationImageFiltering._pdhg_operator_norm_sq_upper_bound(inv_spacing, shape_spatial)
+    op_norm_sq = TotalVariationImageFiltering._pdhg_operator_norm_sq_upper_bound(
+        inv_spacing,
+        shape_spatial,
+    )
     if op_norm_sq > zero(T)
         tau_t * sigma_t * op_norm_sq < one(T) || throw(
             ArgumentError(
@@ -1131,7 +1345,8 @@ function solve_batch!(
         PDHGBatchState(f_batch, Val(spatial_ndims))
     elseif state isa PDHGBatchState
         shape = size(f_batch)
-        size(state.u) == shape || throw(ArgumentError("state.u size must match f_batch size"))
+        size(state.u) == shape ||
+            throw(ArgumentError("state.u size must match f_batch size"))
         size(state.u_prev) == shape ||
             throw(ArgumentError("state.u_prev size must match f_batch size"))
         size(state.u_bar) == shape ||
@@ -1144,15 +1359,17 @@ function solve_batch!(
             throw(ArgumentError("state.p buffers must match spatial dimensions"))
         length(state.p_prev) == spatial_ndims ||
             throw(ArgumentError("state.p_prev buffers must match spatial dimensions"))
-        length(state.grad_u_bar) == spatial_ndims ||
-            throw(ArgumentError("state.grad_u_bar buffers must match spatial dimensions"))
+        length(state.grad_u_bar) == spatial_ndims || throw(
+            ArgumentError("state.grad_u_bar buffers must match spatial dimensions"),
+        )
         @inbounds for d = 1:spatial_ndims
             size(state.p[d]) == shape ||
                 throw(ArgumentError("state.p[$d] size must match f_batch size"))
             size(state.p_prev[d]) == shape ||
                 throw(ArgumentError("state.p_prev[$d] size must match f_batch size"))
-            size(state.grad_u_bar[d]) == shape ||
-                throw(ArgumentError("state.grad_u_bar[$d] size must match f_batch size"))
+            size(state.grad_u_bar[d]) == shape || throw(
+                ArgumentError("state.grad_u_bar[$d] size must match f_batch size"),
+            )
         end
         state
     else
@@ -1183,6 +1400,7 @@ function solve_batch!(
             inv_spacing,
             data_fidelity,
             tv_mode,
+            boundary,
             done_device,
             has_done,
             batch_stride,
@@ -1194,11 +1412,13 @@ function solve_batch!(
             @views for b = 1:batch_count
                 done_host[b] == UInt8(1) && continue
                 slice_state = _pdhg_batch_slice_state(local_state, b)
-                primal_rel_change =
-                    TotalVariationImageFiltering._relative_change(slice_state.u_prev, slice_state.u)
+                primal_rel_change = TotalVariationImageFiltering._relative_change(
+                    slice_state.u_prev,
+                    slice_state.u,
+                )
                 pdhg_residual = _pdhg_relative_residual_cuda!(
                     slice_state,
-                    Neumann(),
+                    boundary,
                     tau_t,
                     sigma_t,
                     inv_spacing,

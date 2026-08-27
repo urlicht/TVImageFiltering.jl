@@ -12,6 +12,11 @@ Forward-difference gradient with homogeneous Neumann boundary treatment.
 """
 struct Neumann <: AbstractBoundaryCondition end
 
+"""
+Forward-difference gradient with periodic wraparound at every boundary.
+"""
+struct Periodic <: AbstractBoundaryCondition end
+
 #
 # Data fidelity
 #

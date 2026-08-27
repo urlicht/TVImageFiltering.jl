@@ -1,4 +1,5 @@
 include("utility.jl")
 include("divergence.jl")
 include("gradient.jl")
+include("group_sum.jl")
 include("projection.jl")

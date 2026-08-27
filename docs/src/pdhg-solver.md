@@ -65,6 +65,9 @@ so it checks:
 \tau \sigma < \frac{1}{4\sum_{d:\,n_d>1} h_d^{-2}}.
 ```
 
+Both `Neumann()` and `Periodic()` boundaries are supported. The same boundary
+is used by the forward gradient and its negative-adjoint divergence.
+
 ## Stopping Criterion
 
 Convergence is checked every `check_every` iterations with:

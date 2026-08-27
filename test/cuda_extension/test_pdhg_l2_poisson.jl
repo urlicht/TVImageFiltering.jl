@@ -23,14 +23,16 @@ using CUDA
         data_fidelity = TotalVariationImageFiltering.L2Fidelity(),
         tv_mode = TotalVariationImageFiltering.IsotropicTV(),
     )
-    u_cpu_pdhg_l2, stats_cpu_pdhg_l2 = TotalVariationImageFiltering.solve(prob_cpu_pdhg_l2, pdhg_config)
+    u_cpu_pdhg_l2, stats_cpu_pdhg_l2 =
+        TotalVariationImageFiltering.solve(prob_cpu_pdhg_l2, pdhg_config)
     prob_gpu_pdhg_l2 = TotalVariationImageFiltering.TVProblem(
         f_gpu;
         lambda = 0.15f0,
         data_fidelity = TotalVariationImageFiltering.L2Fidelity(),
         tv_mode = TotalVariationImageFiltering.IsotropicTV(),
     )
-    u_gpu_pdhg_l2, stats_gpu_pdhg_l2 = TotalVariationImageFiltering.solve(prob_gpu_pdhg_l2, pdhg_config)
+    u_gpu_pdhg_l2, stats_gpu_pdhg_l2 =
+        TotalVariationImageFiltering.solve(prob_gpu_pdhg_l2, pdhg_config)
 
     @test stats_cpu_pdhg_l2.iterations <= pdhg_config.maxiter
     @test stats_gpu_pdhg_l2.iterations <= pdhg_config.maxiter
